@@ -115,14 +115,26 @@ def main() -> int:
 
     # Host-side helpers
     # TODO: generate helper scripts based the results of the above probes
-    hooks = {"hooks" : [ {"hookname": "createContainer", "path": "/bin/" + hookfilename }]}
     allnodes = rendernodes + videonodes + dmaheaps + cdsps
     logging.info("Total nodes aggregated for hook: %d", len(allnodes))
+
+    # Bind mounts into container
+    # The primary use case is passing tightly coupled files into the
+    # container, notably Hexagon binaries. The Hexagon binaries are
+    # tightly coupled to the files loaded by the in-kernel firmware
+    # loader. To lower the chance of a mismatch, Hexagon binaries found
+    # on the host will be bind mounted automatically
+    localfiles = find_devicenodes('/usr/share/*/*/*/*/dsp/')
+    mountentries = [None] * len(localfiles)
+    for localfile in localfiles:
+        mountentries[0] ={"hostPath": localfile , "containerPath": localfile, "options": ["nosuid", "ro", "bind"]}
 
     # Assemble the complete CDI json
     cdimain = { "cdiVersion": "0.6.0", "kind": "qualcomm.com/device"}
     cdimain["devices"] = render_cdi + video_cdi + dmaheap_cdi + cdsps_cdi + adsps_cdi
-    cdimain["containerEdits"] = hooks
+    cdimain["containerEdits"] = {"hooks" : [ {"hookname": "createContainer", "path": "/bin/" + hookfilename }],
+                                 "mounts" : mountentries
+                                }
 
     # Generate hookscript that runs during createContainer
     hookscriptbindir = Path(destdir).joinpath('bin')
