@@ -126,8 +126,10 @@ def main() -> int:
     # on the host will be bind mounted automatically
     localfiles = find_devicenodes('/usr/share/*/*/*/*/dsp/')
     mountentries = [None] * len(localfiles)
+    mountentry = 0
     for localfile in localfiles:
-        mountentries[0] ={"hostPath": localfile , "containerPath": localfile, "options": ["nosuid", "ro", "bind"]}
+        mountentries[mountentry] ={"hostPath": localfile , "containerPath": localfile, "options": ["nosuid", "ro", "bind"]}
+        mountentry += 1
 
     # Assemble the complete CDI json
     cdimain = { "cdiVersion": "0.6.0", "kind": "qualcomm.com/device"}
