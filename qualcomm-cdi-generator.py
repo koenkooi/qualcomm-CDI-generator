@@ -14,6 +14,8 @@ import logging
 import os
 import argparse
 
+from linuxpy.video.device import Device
+
 def setup_logging(verbosity: int) -> None:
     level = logging.WARNING
     if verbosity == 1:
@@ -43,6 +45,7 @@ def generate_devicenodes_cdi(nickname, filesglob):
         devicenodeindex = 0
         devicenodelist = [None] * (len(filesglob) + 1)
         for devicenode in sorted(filesglob):
+            device_annotations = None
             device_path = {"path": devicenode}
             # Special case cdsp, which was a -secure sibling node
             if str(devicenode).endswith('cdsp'):
@@ -56,10 +59,15 @@ def generate_devicenodes_cdi(nickname, filesglob):
             if len(filesglob) == 1 and cdi_index is None:
                 cdi_index = ""
             # Reuse the devicenode index if present, otherwise generate our own
-            if cdi_index is not None:
+            if cdi_index is None:
+                cdi_index = devicenodeindex
+            if str(nickname) == "video":
+                cardname, bustype = get_v4l2_info(devicenode)
+                device_annotations = { "name": cardname, "bustype": bustype }
+            if device_annotations is None:
                 device_entry = { "name": nickname+str(cdi_index), "containerEdits": device_pathlist }
             else:
-                device_entry = { "name": nickname+str(devicenodeindex), "containerEdits": device_pathlist }
+                device_entry = { "name": nickname+str(cdi_index), "annotations": device_annotations, "containerEdits": device_pathlist }
             logging.debug("CDI device entry: %s", device_entry)
             devicenodelist[devicenodeindex] = device_entry
             devicenodeindex += 1
@@ -81,6 +89,19 @@ def generate_devicenodes_cdi(nickname, filesglob):
 def get_devicenode_index(nodename):
     nodeindex = re.search(r'\d+$', nodename)
     return int(nodeindex.group()) if nodeindex else None
+
+def get_v4l2_info(devicenode):
+    if os.path.exists(devicenode):
+        v4l2node = Device(devicenode)
+        v4l2node.open()
+        logging.debug("Video node name: %s, bus type: %s", str(v4l2node.info.card).replace(' ', '-'), str(v4l2node.info.bus_info).split('-')[0].split(':')[0])
+        cardname = str(v4l2node.info.card)
+        bustype = str(v4l2node.info.bus_info).split('-')[0].split(':')[0]
+        v4l2node.close()
+    else:
+        cardname = None
+        bustype = None
+    return cardname, bustype
 
 def main() -> int:
     args = parse_args()
