@@ -135,7 +135,7 @@ def main() -> int:
     cdimain = { "cdiVersion": "0.6.0", "kind": "qualcomm.com/device"}
     cdimain["devices"] = render_cdi + video_cdi + dmaheap_cdi + cdsps_cdi + adsps_cdi
     cdimain["containerEdits"] = {"hooks" : [ {"hookname": "createContainer", "path": "/bin/" + hookfilename }],
-                                 "mounts" : mountentries
+                                 "mounts" : list(filter(None, mountentries))
                                 }
 
     # Generate hookscript that runs during createContainer
