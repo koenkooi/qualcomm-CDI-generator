@@ -124,12 +124,21 @@ def main() -> int:
     # tightly coupled to the files loaded by the in-kernel firmware
     # loader. To lower the chance of a mismatch, Hexagon binaries found
     # on the host will be bind mounted automatically
+    # Bind mount devicetree model if present
+    devicetreefound = 0
+    dtmodel = glob.glob("/sys/firmware/devicetree/base/model")
+    if dtmodel != None:
+        devicetreefound = 1
+        dtmodelmount ={"hostPath": "/sys/firmware/devicetree/base/model" , "containerPath": "/run/device-model", "options": ["nosuid", "ro", "bind"]}
+
     localfiles = find_devicenodes('/usr/share/*/*/*/*/dsp/')
-    mountentries = [None] * len(localfiles)
+    mountentries = [None] * (len(localfiles) + devicetreefound)
     mountentry = 0
     for localfile in localfiles:
         mountentries[mountentry] ={"hostPath": localfile , "containerPath": localfile, "options": ["nosuid", "ro", "bind"]}
         mountentry += 1
+    if devicetreefound > 0:
+        mountentries[mountentry] = dtmodelmount
 
     # Assemble the complete CDI json
     cdimain = { "cdiVersion": "0.6.0", "kind": "qualcomm.com/device"}
