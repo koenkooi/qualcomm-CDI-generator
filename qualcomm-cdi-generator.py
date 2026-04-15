@@ -53,7 +53,7 @@ def generate_devicenodes_cdi(nickname, filesglob):
                 device_pathlist = { "deviceNodes": [ device_path ] }
             cdi_index = get_devicenode_index(devicenode)
             # If there's only one match *and* it doesn't have its own index, don't add the '0' index
-            if len(filesglob) == 1 and not cdi_index:
+            if len(filesglob) == 1 and cdi_index is None:
                 cdi_index = ""
             # Reuse the devicenode index if present, otherwise generate our own
             if cdi_index is not None:
