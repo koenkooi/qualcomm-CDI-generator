@@ -115,7 +115,7 @@ def main() -> int:
 
     # Host-side helpers
     # TODO: generate helper scripts based the results of the above probes
-    allnodes = rendernodes + videonodes + dmaheaps + cdsps
+    allnodes = rendernodes + videonodes + dmaheaps + cdsps + adsps
     logging.info("Total nodes aggregated for hook: %d", len(allnodes))
 
     # Bind mounts into container
