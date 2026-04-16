@@ -41,6 +41,7 @@ def generate_devicenodes_cdi(nickname, filesglob):
     if filesglob:
         logging.info("Generating CDI entries for '%s' with %d node(s)", nickname, len(filesglob) if filesglob else 0)
         devicenodeindex = 0
+        # +1 to reserve a slot for the ':all' catch-all entry appended after the loop
         devicenodelist = [None] * (len(filesglob) + 1)
         for devicenode in sorted(filesglob):
             device_path = {"path": devicenode}
@@ -54,16 +55,21 @@ def generate_devicenodes_cdi(nickname, filesglob):
             cdi_index = get_devicenode_index(devicenode)
             # If there's only one match *and* it doesn't have its own index, don't add the '0' index
             if len(filesglob) == 1 and cdi_index is None:
+                # Empty string means str(cdi_index) appends nothing, giving just 'nickname'
                 cdi_index = ""
             # Reuse the devicenode index if present, otherwise generate our own
             if cdi_index is not None:
+                # cdi_index is either an int parsed from the node name or "" (single unnamed node)
                 device_entry = { "name": nickname+str(cdi_index), "containerEdits": device_pathlist }
             else:
+                # No index in the node name and multiple nodes: fall back to a sequential counter
                 device_entry = { "name": nickname+str(devicenodeindex), "containerEdits": device_pathlist }
             logging.debug("CDI device entry: %s", device_entry)
             devicenodelist[devicenodeindex] = device_entry
             devicenodeindex += 1
 
+        # Build a catch-all entry that exposes every node in this class at once;
+        # useful when a container needs the full set without listing them individually
         catchallindex = 0
         device_paths = [None] * len(filesglob)
         for devicenode in sorted(filesglob):
@@ -79,6 +85,7 @@ def generate_devicenodes_cdi(nickname, filesglob):
     return devicenodelist
 
 def get_devicenode_index(nodename):
+    # Extract a trailing integer from the node name (e.g. 128 from 'renderD128')
     nodeindex = re.search(r'\d+$', nodename)
     return int(nodeindex.group()) if nodeindex else None
 
@@ -127,16 +134,19 @@ def main() -> int:
     # Bind mount devicetree model if present
     devicetreefound = 0
     dtmodelstring = None
+    # glob.glob() always returns a list; check for non-empty to confirm the file exists
     dtmodel = glob.glob("/sys/firmware/devicetree/base/model")
-    if dtmodel != None:
+    if dtmodel:
         devicetreefound = 1
         dtmodelmount ={"hostPath": "/sys/firmware/devicetree/base/model" , "containerPath": "/run/device-model", "options": ["nosuid", "ro", "bind"]}
         modeldtnode = open("/sys/firmware/devicetree/base/model", "r")
         # remove literal Null terminator during read
         dtmodelstring = str(modeldtnode.read()).replace('\u0000', '')
-        logging.info("Detected $s from devicetree", dtmodelstring)
+        logging.info("Detected %s from devicetree", dtmodelstring)
         modeldtnode.close()
 
+    # Glob for Hexagon DSP firmware directories; the four wildcard levels match
+    # vendor/package/version/arch sub-paths under /usr/share
     localfiles = find_devicenodes('/usr/share/*/*/*/*/dsp/')
     mountentries = [None] * (len(localfiles) + devicetreefound)
     mountentry = 0
@@ -165,6 +175,7 @@ def main() -> int:
     logging.info("Wrote hook script: %s", hookscriptpath)
 
     container_edits = {"hooks": [{"hookname": "createContainer", "path": "/bin/" + hookfilename}],
+                       # filter(None, ...) strips any None placeholders left in the pre-allocated list
                        "mounts": list(filter(None, mountentries)),
                        "env": enventries}
 
