@@ -151,14 +151,6 @@ def main() -> int:
     if dtmodelstring is not None:
         enventries = [ "MACHINE_NAME=" + dtmodelstring ]
 
-    # Assemble the complete CDI json
-    cdimain = { "cdiVersion": "0.6.0", "kind": "qualcomm.com/device"}
-    cdimain["devices"] = render_cdi + video_cdi + dmaheap_cdi + cdsps_cdi + adsps_cdi
-    cdimain["containerEdits"] = {"hooks" : [ {"hookname": "createContainer", "path": "/bin/" + hookfilename }],
-                                 "mounts" : list(filter(None, mountentries)),
-                                 "env" : enventries
-                                }
-
     # Generate hookscript that runs during createContainer
     hookscriptbindir = Path(destdir).joinpath('bin')
     Path(hookscriptbindir).mkdir(parents=True, exist_ok=True)
@@ -172,14 +164,34 @@ def main() -> int:
     hookscriptpath.chmod(hookscriptpath.stat().st_mode | stat.S_IEXEC)
     logging.info("Wrote hook script: %s", hookscriptpath)
 
-    # Write out complete CDI json
+    container_edits = {"hooks": [{"hookname": "createContainer", "path": "/bin/" + hookfilename}],
+                       "mounts": list(filter(None, mountentries)),
+                       "env": enventries}
+
+    # Write one CDI json per device class
+    cdi_sections = [
+        ('gpu',       render_cdi),
+        ('v4l2',         video_cdi),
+        ('dmaheap', dmaheap_cdi),
+        ('fastrpc-cdsp',  cdsps_cdi),
+        ('fastrpc-adsp',  adsps_cdi),
+    ]
     dynamiccdidir = Path(destdir).joinpath('run/cdi')
     Path(dynamiccdidir).mkdir(parents=True, exist_ok=True)
-    cdipath = Path(dynamiccdidir).joinpath(cdifilename)
-    with open(cdipath, "w") as cdifile:
-        cdifile.write(json.dumps(cdimain))
-    cdifile.close()
-    logging.info("Wrote CDI JSON: %s", cdipath)
+    cdifilename_stem = Path(cdifilename).stem
+    cdifilename_suffix = Path(cdifilename).suffix
+    for cdiclass, devices in cdi_sections:
+        if not devices:
+            logging.debug("Skipping CDI file for '%s': no devices", cdiclass)
+            continue
+        cdi = {"cdiVersion": "0.6.0", "kind": "qualcomm.com/" + cdiclass}
+        cdi["devices"] = devices
+        cdi["containerEdits"] = container_edits
+        section_filename = "%s-%s%s" % (cdifilename_stem, cdiclass, cdifilename_suffix)
+        cdipath = dynamiccdidir.joinpath(section_filename)
+        with open(cdipath, "w") as cdifile:
+            cdifile.write(json.dumps(cdi))
+        logging.info("Wrote CDI JSON: %s", cdipath)
 
     logging.info("Completed Qualcomm CDI generation")
     return 0
