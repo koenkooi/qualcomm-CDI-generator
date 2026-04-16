@@ -128,13 +128,13 @@ def main() -> int:
     devicetreefound = 0
     dtmodelstring = None
     dtmodel = glob.glob("/sys/firmware/devicetree/base/model")
-    if dtmodel != None:
+    if dtmodel:
         devicetreefound = 1
         dtmodelmount ={"hostPath": "/sys/firmware/devicetree/base/model" , "containerPath": "/run/device-model", "options": ["nosuid", "ro", "bind"]}
         modeldtnode = open("/sys/firmware/devicetree/base/model", "r")
         # remove literal Null terminator during read
         dtmodelstring = str(modeldtnode.read()).replace('\u0000', '')
-        logging.info("Detected $s from devicetree", dtmodelstring)
+        logging.info("Detected %s from devicetree", dtmodelstring)
         modeldtnode.close()
 
     localfiles = find_devicenodes('/usr/share/*/*/*/*/dsp/')
