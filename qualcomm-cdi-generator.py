@@ -124,18 +124,39 @@ def main() -> int:
     # tightly coupled to the files loaded by the in-kernel firmware
     # loader. To lower the chance of a mismatch, Hexagon binaries found
     # on the host will be bind mounted automatically
+    # Bind mount devicetree model if present
+    devicetreefound = 0
+    dtmodelstring = None
+    dtmodel = glob.glob("/sys/firmware/devicetree/base/model")
+    if dtmodel != None:
+        devicetreefound = 1
+        dtmodelmount ={"hostPath": "/sys/firmware/devicetree/base/model" , "containerPath": "/run/device-model", "options": ["nosuid", "ro", "bind"]}
+        modeldtnode = open("/sys/firmware/devicetree/base/model", "r")
+        # remove literal Null terminator during read
+        dtmodelstring = str(modeldtnode.read()).replace('\u0000', '')
+        logging.info("Detected $s from devicetree", dtmodelstring)
+        modeldtnode.close()
+
     localfiles = find_devicenodes('/usr/share/*/*/*/*/dsp/')
-    mountentries = [None] * len(localfiles)
+    mountentries = [None] * (len(localfiles) + devicetreefound)
     mountentry = 0
     for localfile in localfiles:
         mountentries[mountentry] ={"hostPath": localfile , "containerPath": localfile, "options": ["nosuid", "ro", "bind"]}
         mountentry += 1
+    if devicetreefound > 0:
+        mountentries[mountentry] = dtmodelmount
+
+
+    enventries = []
+    if dtmodelstring is not None:
+        enventries = [ "MACHINE_NAME=" + dtmodelstring ]
 
     # Assemble the complete CDI json
     cdimain = { "cdiVersion": "0.6.0", "kind": "qualcomm.com/device"}
     cdimain["devices"] = render_cdi + video_cdi + dmaheap_cdi + cdsps_cdi + adsps_cdi
     cdimain["containerEdits"] = {"hooks" : [ {"hookname": "createContainer", "path": "/bin/" + hookfilename }],
                                  "mounts" : list(filter(None, mountentries))
+                                 "env" : enventries
                                 }
 
     # Generate hookscript that runs during createContainer
