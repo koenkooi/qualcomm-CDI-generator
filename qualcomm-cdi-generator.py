@@ -155,7 +155,7 @@ def main() -> int:
     cdimain = { "cdiVersion": "0.6.0", "kind": "qualcomm.com/device"}
     cdimain["devices"] = render_cdi + video_cdi + dmaheap_cdi + cdsps_cdi + adsps_cdi
     cdimain["containerEdits"] = {"hooks" : [ {"hookname": "createContainer", "path": "/bin/" + hookfilename }],
-                                 "mounts" : list(filter(None, mountentries))
+                                 "mounts" : list(filter(None, mountentries)),
                                  "env" : enventries
                                 }
 
