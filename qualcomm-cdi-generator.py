@@ -26,7 +26,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Generate Qualcomm CDI and hook script")
     parser.add_argument("-d", "--destdir", default="/", help="Destination root directory (default: %(default)s)")
     parser.add_argument("-H", "--hookfilename", default="vendorhook", help="Hook script filename (default: %(default)s)")
-    parser.add_argument("-c", "--cdifilename", default="qualcomm.json", help="CDI JSON filename (default: %(default)s)")
+    parser.add_argument("-c", "--cdifilename", default="qualcomm.json", help="CDI JSON filename base; the device class is inserted before the extension, e.g. qualcomm.json -> qualcomm-gpu.json (default: %(default)s)")
     parser.add_argument("-v", "--verbose", action="count", default=0, help="Increase verbosity (-v, -vv)")
     return parser.parse_args()
 
