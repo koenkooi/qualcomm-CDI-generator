@@ -174,11 +174,6 @@ def main() -> int:
     hookscriptpath.chmod(hookscriptpath.stat().st_mode | stat.S_IEXEC)
     logging.info("Wrote hook script: %s", hookscriptpath)
 
-    container_edits = {"hooks": [{"hookname": "createContainer", "path": "/bin/" + hookfilename}],
-                       # filter(None, ...) strips any None placeholders left in the pre-allocated list
-                       "mounts": list(filter(None, mountentries)),
-                       "env": enventries}
-
     # Write one CDI json per device class
     cdi_sections = [
         ('gpu',       render_cdi),
@@ -197,6 +192,13 @@ def main() -> int:
             continue
         cdi = {"cdiVersion": "0.6.0", "kind": "qualcomm.com/" + cdiclass}
         cdi["devices"] = devices
+        container_edits = {"hooks": [{"hookname": "createContainer", "path": "/bin/" + hookfilename}],
+                           "env": enventries}
+        # Only bind-mount DSP firmware and devicetree for fastrpc device classes,
+        # as those are the only classes that use Hexagon binaries
+        if "fastrpc" in cdiclass:
+            # filter(None, ...) strips any None placeholders left in the pre-allocated list
+            container_edits["mounts"] = list(filter(None, mountentries))
         cdi["containerEdits"] = container_edits
         section_filename = "%s-%s%s" % (cdifilename_stem, cdiclass, cdifilename_suffix)
         cdipath = dynamiccdidir.joinpath(section_filename)
