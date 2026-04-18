@@ -14,6 +14,8 @@ import logging
 import os
 import argparse
 
+known_classes = ['gpu', 'v4l2', 'dmaheap', 'fastrpc-cdsp', 'fastrpc-adsp']
+
 def setup_logging(verbosity: int) -> None:
     level = logging.WARNING
     if verbosity == 1:
@@ -27,6 +29,7 @@ def parse_args():
     parser.add_argument("-d", "--destdir", default="/", help="Destination root directory (default: %(default)s)")
     parser.add_argument("-H", "--hookfilename", default="vendorhook", help="Hook script filename (default: %(default)s)")
     parser.add_argument("-c", "--cdifilename", default="qualcomm.json", help="CDI JSON filename base; the device class is inserted before the extension, e.g. qualcomm.json -> qualcomm-gpu.json (default: %(default)s)")
+    parser.add_argument("-C", "--classes", default=None, help="Comma-separated list of CDI classes to generate (default: all). Available: %s" % ", ".join(known_classes))
     parser.add_argument("-n", "--dry-run", action="store_true", help="Parse and probe devices but do not write any files")
     parser.add_argument("-v", "--verbose", action="count", default=0, help="Increase verbosity (-v, -vv)")
     return parser.parse_args()
@@ -95,6 +98,17 @@ def main() -> int:
     setup_logging(args.verbose)
     logging.info("Starting Qualcomm CDI generation")
     logging.info("Config: destdir=%s, hookfilename=%s, cdifilename=%s, dry_run=%s", args.destdir, args.hookfilename, args.cdifilename, args.dry_run)
+
+    if args.classes is not None:
+        requested = [c.strip() for c in args.classes.split(',')]
+        unknown = [c for c in requested if c not in known_classes]
+        if unknown:
+            print("Error: unknown class(es): %s" % ", ".join(unknown), file=sys.stderr)
+            print("Available classes: %s" % ", ".join(known_classes), file=sys.stderr)
+            return 1
+        enabled_classes = requested
+    else:
+        enabled_classes = known_classes
 
     # Use CLI-configured values
     destdir = args.destdir
@@ -180,12 +194,13 @@ def main() -> int:
 
     # Write one CDI json per device class
     cdi_sections = [
-        ('gpu',       render_cdi),
+        ('gpu',          render_cdi),
         ('v4l2',         video_cdi),
-        ('dmaheap', dmaheap_cdi),
-        ('fastrpc-cdsp',  cdsps_cdi),
-        ('fastrpc-adsp',  adsps_cdi),
+        ('dmaheap',      dmaheap_cdi),
+        ('fastrpc-cdsp', cdsps_cdi),
+        ('fastrpc-adsp', adsps_cdi),
     ]
+    cdi_sections = [(c, d) for c, d in cdi_sections if c in enabled_classes]
     dynamiccdidir = Path(destdir).joinpath('run/cdi')
     cdifilename_stem = Path(cdifilename).stem
     cdifilename_suffix = Path(cdifilename).suffix
