@@ -49,9 +49,9 @@ def generate_devicenodes_cdi(nickname, filesglob):
         devicenodelist = [None] * (len(filesglob) + 1)
         for devicenode in sorted(filesglob):
             device_path = {"path": devicenode}
-            # Special case cdsp, which was a -secure sibling node
-            if str(devicenode).endswith('cdsp'):
-                logging.debug("CDSP detected, adding regular and -secure variants")
+            # Special case cdsp/adsp, which have a -secure sibling node
+            if str(devicenode).endswith('cdsp') or str(devicenode).endswith('adsp'):
+                logging.debug("DSP node detected, adding regular and -secure variants")
                 securedevice_path = {"path": devicenode + "-secure"}
                 device_pathlist = { "deviceNodes": [ device_path, securedevice_path ] }
             else:
@@ -77,8 +77,8 @@ def generate_devicenodes_cdi(nickname, filesglob):
         device_paths = []
         for devicenode in sorted(filesglob):
             device_paths.append({"path": devicenode})
-            # Mirror the per-device special case so cdsp-secure is also in :all
-            if str(devicenode).endswith('cdsp'):
+            # Mirror the per-device special case so cdsp-secure/adsp-secure is also in :all
+            if str(devicenode).endswith('cdsp') or str(devicenode).endswith('adsp'):
                 device_paths.append({"path": devicenode + "-secure"})
         device_pathlist = { "deviceNodes":  device_paths  }
         device_entrys = { "name": nickname+":all", "containerEdits": device_pathlist }
