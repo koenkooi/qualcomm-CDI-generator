@@ -51,9 +51,13 @@ def generate_devicenodes_cdi(nickname, filesglob):
             device_path = {"path": devicenode}
             # Special case cdsp/adsp, which have a -secure sibling node
             if str(devicenode).endswith('cdsp') or str(devicenode).endswith('adsp'):
-                logging.debug("DSP node detected, adding regular and -secure variants")
-                securedevice_path = {"path": devicenode + "-secure"}
-                device_pathlist = { "deviceNodes": [ device_path, securedevice_path ] }
+                securepath = devicenode + "-secure"
+                if Path(securepath).exists():
+                    logging.debug("DSP node detected, adding regular and -secure variants")
+                    device_pathlist = { "deviceNodes": [ device_path, {"path": securepath} ] }
+                else:
+                    logging.debug("DSP node detected, -secure variant not present, skipping")
+                    device_pathlist = { "deviceNodes": [ device_path ] }
             else:
                 device_pathlist = { "deviceNodes": [ device_path ] }
             cdi_index = get_devicenode_index(devicenode)
@@ -79,7 +83,9 @@ def generate_devicenodes_cdi(nickname, filesglob):
             device_paths.append({"path": devicenode})
             # Mirror the per-device special case so cdsp-secure/adsp-secure is also in :all
             if str(devicenode).endswith('cdsp') or str(devicenode).endswith('adsp'):
-                device_paths.append({"path": devicenode + "-secure"})
+                securepath = devicenode + "-secure"
+                if Path(securepath).exists():
+                    device_paths.append({"path": securepath})
         device_pathlist = { "deviceNodes":  device_paths  }
         device_entrys = { "name": nickname+":all", "containerEdits": device_pathlist }
         logging.debug("CDI catch-all entry: %s", device_entrys)
