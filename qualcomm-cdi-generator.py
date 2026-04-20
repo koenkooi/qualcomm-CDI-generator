@@ -74,11 +74,12 @@ def generate_devicenodes_cdi(nickname, filesglob):
 
         # Build a catch-all entry that exposes every node in this class at once;
         # useful when a container needs the full set without listing them individually
-        catchallindex = 0
-        device_paths = [None] * len(filesglob)
+        device_paths = []
         for devicenode in sorted(filesglob):
-            device_paths[catchallindex] = {"path": devicenode}
-            catchallindex += 1
+            device_paths.append({"path": devicenode})
+            # Mirror the per-device special case so cdsp-secure is also in :all
+            if str(devicenode).endswith('cdsp'):
+                device_paths.append({"path": devicenode + "-secure"})
         device_pathlist = { "deviceNodes":  device_paths  }
         device_entrys = { "name": nickname+":all", "containerEdits": device_pathlist }
         logging.debug("CDI catch-all entry: %s", device_entrys)
