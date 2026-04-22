@@ -16,13 +16,31 @@ import argparse
 
 known_classes = ['gpu', 'v4l2', 'dmaheap', 'fastrpc-cdsp', 'fastrpc-adsp']
 
+_LOG_COLORS = {
+    logging.DEBUG:    "\033[36m",   # cyan
+    logging.INFO:     "\033[32m",   # green
+    logging.WARNING:  "\033[33m",   # yellow
+    logging.ERROR:    "\033[31m",   # red
+    logging.CRITICAL: "\033[1;31m", # bold red
+}
+_RESET = "\033[0m"
+
+class ColorFormatter(logging.Formatter):
+    def format(self, record):
+        color = _LOG_COLORS.get(record.levelno, "")
+        record.levelname = color + record.levelname + _RESET
+        return super().format(record)
+
 def setup_logging(verbosity: int) -> None:
     level = logging.WARNING
     if verbosity == 1:
         level = logging.INFO
     elif verbosity >= 2:
         level = logging.DEBUG
-    logging.basicConfig(format="%(levelname)s: %(message)s", level=level)
+    handler = logging.StreamHandler()
+    fmt = "%(levelname)s: %(message)s"
+    handler.setFormatter(ColorFormatter(fmt) if handler.stream.isatty() else logging.Formatter(fmt))
+    logging.basicConfig(handlers=[handler], level=level)
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Generate Qualcomm CDI and hook script")
