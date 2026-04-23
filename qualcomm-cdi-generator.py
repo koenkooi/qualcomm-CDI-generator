@@ -240,6 +240,10 @@ def main() -> int:
     ]
     cdi_sections = [(c, d) for c, d in cdi_sections if c in enabled_classes]
     dynamiccdidir = Path(destdir).joinpath('run/cdi')
+    monolithic_cdi = dynamiccdidir.joinpath(cdifilename)
+    if not args.dry_run and monolithic_cdi.exists():
+        logging.warning("Old style monolithic CDI detected, removing %s", monolithic_cdi)
+        monolithic_cdi.unlink()
     cdifilename_stem = Path(cdifilename).stem
     cdifilename_suffix = Path(cdifilename).suffix
     for cdiclass, devices in cdi_sections:
