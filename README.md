@@ -1,6 +1,4 @@
-# Project Name
-
-*Qualcomm CDI generator*
+# Qualcomm CDI generator
 
 Tooling to generate CDI config files to pass devices through to containers
 
