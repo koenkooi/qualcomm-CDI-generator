@@ -40,129 +40,93 @@ Copy over `qualcomm-cdi-generator.py`
 
 ## Usage
 
-On the target run the CDI generator:
+On the target, run the CDI generator as root. The output directory `/run/cdi` is created automatically:
 
 ```shell
-# mkdir -p /run/cdi
 # qualcomm-cdi-generator.py
 ```
 
-Example session:
+The tool probes the hardware, writes one CDI JSON file per device class under `/run/cdi`, and writes a hook script to `/bin/vendorhook`. Run with `-v` to see what was found and written, or `-vv` for full debug output.
+
+### Command-line options
+
+| Option | Long form | Default | Description |
+|--------|-----------|---------|-------------|
+| `-d` | `--destdir` | `/` | Root directory for all output paths |
+| `-H` | `--hookfilename` | `vendorhook` | Hook script filename written under `<destdir>/bin/` |
+| `-c` | `--cdifilename` | `qualcomm.json` | CDI filename base; the device class is inserted before the extension, e.g. `qualcomm.json` → `qualcomm-gpu.json` |
+| `-C` | `--classes` | all | Comma-separated list of CDI classes to generate. Available: `gpu`, `v4l2`, `dmaheap`, `fastrpc-cdsp`, `fastrpc-adsp` |
+| `-n` | `--dry-run` | off | Probe devices but do not write any files |
+| `-v` | `--verbose` | off | Increase verbosity; use `-vv` for debug output |
+
+### Example session
+
 ```shell
-root@qcs6490-rb3gen2-core-kit:~# mkdir -p /run/cdi
-root@qcs6490-rb3gen2-core-kit:~# ./qualcomm-cdi-generator.py
-{'name': 'renderD128', 'containerEdits': {'deviceNodes': [{'path': '/dev/dri/renderD128'}]}}
-{'name': 'video0', 'containerEdits': {'deviceNodes': [{'path': '/dev/video0'}]}}
-{'name': 'video1', 'containerEdits': {'deviceNodes': [{'path': '/dev/video1'}]}}
-{'name': 'dmaheap-system', 'containerEdits': {'deviceNodes': [{'path': '/dev/dma_heap/system'}]}}
-{'name': 'fastrpc-cdsp', 'containerEdits': {'deviceNodes': [{'path': '/dev/fastrpc-cdsp'}]}}
+root@qcs6490-rb3gen2-core-kit:~# qualcomm-cdi-generator.py -v
+INFO: Found 1 nodes for pattern /dev/dri/renderD*
+INFO: Found 2 nodes for pattern /dev/video*
+INFO: Found 1 nodes for pattern /dev/dma_heap/*system
+INFO: Found 1 nodes for pattern /dev/fastrpc-cdsp
+INFO: Wrote hook script: /bin/vendorhook
+INFO: Wrote CDI JSON: /run/cdi/qualcomm-gpu.json
+INFO: Wrote CDI JSON: /run/cdi/qualcomm-v4l2.json
+INFO: Wrote CDI JSON: /run/cdi/qualcomm-dmaheap.json
+INFO: Wrote CDI JSON: /run/cdi/qualcomm-fastrpc-cdsp.json
 root@qcs6490-rb3gen2-core-kit:~# docker info
 [...]
 Server:
  CDI spec directories:
   /etc/cdi
-  /var/run/cdi
+  /var//run/cdi
  Discovered Devices:
-  cdi: qualcomm.com/device=dmaheap-system
-  cdi: qualcomm.com/device=dmaheap-system:all
-  cdi: qualcomm.com/device=fastrpc-cdsp
-  cdi: qualcomm.com/device=fastrpc-cdsp:all
-  cdi: qualcomm.com/device=renderD128
-  cdi: qualcomm.com/device=renderD:all
-  cdi: qualcomm.com/device=video0
-  cdi: qualcomm.com/device=video1
-  cdi: qualcomm.com/device=video:all
+  cdi: qualcomm.com/dmaheap=dmaheap-system
+  cdi: qualcomm.com/dmaheap=dmaheap-system:all
+  cdi: qualcomm.com/fastrpc-cdsp=fastrpc-cdsp
+  cdi: qualcomm.com/fastrpc-cdsp=fastrpc-cdsp:all
+  cdi: qualcomm.com/gpu=renderD128
+  cdi: qualcomm.com/gpu=renderD:all
+  cdi: qualcomm.com/v4l2=video0
+  cdi: qualcomm.com/v4l2=video1
+  cdi: qualcomm.com/v4l2=video:all
 [...]
 ```
+
 You can then pass one or more of the above entries to the runtime:
 ```shell
-root@qcs6490-rb3gen2-core-kit:~# docker run --device qualcomm.com/gpu=render0 --device qualcomm.com/gpu=video:all [..]
+root@qcs6490-rb3gen2-core-kit:~# docker run --device qualcomm.com/gpu=renderD128 --device qualcomm.com/v4l2=video:all [..]
 ```
 
-The resulting CDI from the above session:
+To generate only the fastrpc classes:
+```shell
+# qualcomm-cdi-generator.py --classes fastrpc-cdsp,fastrpc-adsp
+```
+
+### CDI file structure
+
+The tool writes one JSON file per device class. Each file has a `kind` matching its class (e.g. `qualcomm.com/gpu`). The `fastrpc` files additionally include bind-mounts for Hexagon DSP firmware found under `/usr/share/*/*/*/*/dsp/` and the devicetree model string, since those binaries are tightly coupled to the in-kernel firmware loader.
+
+Example `qualcomm-gpu.json`:
 ```json
 {
   "cdiVersion": "0.6.0",
-  "kind": "qualcomm.com/device",
+  "kind": "qualcomm.com/gpu",
   "devices": [
     {
       "name": "renderD128",
       "containerEdits": {
-        "deviceNodes": [
-          { "path": "/dev/dri/renderD128" }
-        ]
+        "deviceNodes": [ { "path": "/dev/dri/renderD128" } ]
       }
     },
     {
       "name": "renderD:all",
       "containerEdits": {
-        "deviceNodes": [
-          { "path": "/dev/dri/renderD128" }
-        ]
-      }
-    },
-    {
-      "name": "video0",
-      "containerEdits": {
-        "deviceNodes": [
-          { "path": "/dev/video0" }
-        ]
-      }
-    },
-    {
-      "name": "video1",
-      "containerEdits": {
-        "deviceNodes": [
-          { "path": "/dev/video1" }
-        ]
-      }
-    },
-    {
-      "name": "video:all",
-      "containerEdits": {
-        "deviceNodes": [
-          { "path": "/dev/video0" },
-          { "path": "/dev/video1" }
-        ]
-      }
-    },
-    {
-      "name": "dmaheap-system",
-      "containerEdits": {
-        "deviceNodes": [
-          { "path": "/dev/dma_heap/system" }
-        ]
-      }
-    },
-    {
-      "name": "dmaheap-system:all",
-      "containerEdits": {
-        "deviceNodes": [
-          { "path": "/dev/dma_heap/system" }
-        ]
-      }
-    },
-    {
-      "name": "fastrpc-cdsp",
-      "containerEdits": {
-        "deviceNodes": [
-          { "path": "/dev/fastrpc-cdsp" }
-        ]
-      }
-    },
-    {
-      "name": "fastrpc-cdsp:all",
-      "containerEdits": {
-        "deviceNodes": [
-          { "path": "/dev/fastrpc-cdsp" }
-        ]
+        "deviceNodes": [ { "path": "/dev/dri/renderD128" } ]
       }
     }
   ],
   "containerEdits": {
-    "hooks": [
-      { "hookname": "createContainer", "path": "/bin/vendor-hook" }
-    ]
+    "hooks": [ { "hookname": "createContainer", "path": "/bin/vendorhook" } ],
+    "env": [ "MACHINE_NAME=Qualcomm Technologies, Inc. Robotics RB3gen2" ]
   }
 }
 ```
