@@ -44,21 +44,36 @@ def find_devicenodes(deviceglob):
 def generate_devicenodes_cdi(nickname, filesglob):
     if filesglob:
         logging.info("Generating CDI entries for '%s' with %d node(s)", nickname, len(filesglob) if filesglob else 0)
+        filesglob_set = set(filesglob)
+
+        # -secure nodes whose non-secure parent is also present are handled as siblings of
+        # that parent entry, not as independent top-level entries
+        def is_sibling(node):
+            return node.endswith('-secure') and node[:-len('-secure')] in filesglob_set
+
+        # Count only nodes that will produce their own CDI entry
+        effective_count = sum(1 for n in filesglob if not is_sibling(n))
+
+        devicenodelist = []
         devicenodeindex = 0
-        # +1 to reserve a slot for the ':all' catch-all entry appended after the loop
-        devicenodelist = [None] * (len(filesglob) + 1)
         for devicenode in sorted(filesglob):
+            if is_sibling(devicenode):
+                continue
             device_path = {"path": devicenode}
-            # Special case cdsp, which was a -secure sibling node
-            if str(devicenode).endswith('cdsp'):
-                logging.debug("CDSP detected, adding regular and -secure variants")
-                securedevice_path = {"path": devicenode + "-secure"}
-                device_pathlist = { "deviceNodes": [ device_path, securedevice_path ] }
+            # cdsp/adsp may have a -secure sibling node
+            if str(devicenode).endswith('cdsp') or str(devicenode).endswith('adsp'):
+                securepath = devicenode + "-secure"
+                if securepath in filesglob_set:
+                    logging.debug("DSP node detected, adding regular and -secure variants")
+                    device_pathlist = { "deviceNodes": [ device_path, {"path": securepath} ] }
+                else:
+                    logging.debug("DSP node detected, -secure variant not present, skipping")
+                    device_pathlist = { "deviceNodes": [ device_path ] }
             else:
                 device_pathlist = { "deviceNodes": [ device_path ] }
             cdi_index = get_devicenode_index(devicenode)
             # If there's only one match *and* it doesn't have its own index, don't add the '0' index
-            if len(filesglob) == 1 and cdi_index is None:
+            if effective_count == 1 and cdi_index is None:
                 # Empty string means str(cdi_index) appends nothing, giving just 'nickname'
                 cdi_index = ""
             # Reuse the devicenode index if present, otherwise generate our own
@@ -69,20 +84,25 @@ def generate_devicenodes_cdi(nickname, filesglob):
                 # No index in the node name and multiple nodes: fall back to a sequential counter
                 device_entry = { "name": nickname+str(devicenodeindex), "containerEdits": device_pathlist }
             logging.debug("CDI device entry: %s", device_entry)
-            devicenodelist[devicenodeindex] = device_entry
+            devicenodelist.append(device_entry)
             devicenodeindex += 1
 
         # Build a catch-all entry that exposes every node in this class at once;
         # useful when a container needs the full set without listing them individually
-        catchallindex = 0
-        device_paths = [None] * len(filesglob)
+        device_paths = []
         for devicenode in sorted(filesglob):
-            device_paths[catchallindex] = {"path": devicenode}
-            catchallindex += 1
+            if is_sibling(devicenode):
+                continue
+            device_paths.append({"path": devicenode})
+            # Mirror the per-device special case so cdsp-secure/adsp-secure is also in :all
+            if str(devicenode).endswith('cdsp') or str(devicenode).endswith('adsp'):
+                securepath = devicenode + "-secure"
+                if securepath in filesglob_set:
+                    device_paths.append({"path": securepath})
         device_pathlist = { "deviceNodes":  device_paths  }
         device_entrys = { "name": nickname+":all", "containerEdits": device_pathlist }
         logging.debug("CDI catch-all entry: %s", device_entrys)
-        devicenodelist[devicenodeindex] = device_entrys
+        devicenodelist.append(device_entrys)
     else:
         devicenodelist = []
         logging.debug("No nodes found for '%s'; no CDI entries generated", nickname)
@@ -129,10 +149,10 @@ def main() -> int:
     dmaheap_cdi = generate_devicenodes_cdi('dmaheap-system', dmaheaps)
 
     # Check for DSP nodes
-    cdsps = find_devicenodes('/dev/fastrpc-cdsp')
+    cdsps = find_devicenodes('/dev/fastrpc-cdsp*')
     cdsps_cdi = generate_devicenodes_cdi('fastrpc-cdsp', cdsps)
 
-    adsps = find_devicenodes('/dev/fastrpc-adsp')
+    adsps = find_devicenodes('/dev/fastrpc-adsp*')
     adsps_cdi = generate_devicenodes_cdi('fastrpc-adsp', adsps)
 
     # Host-side helpers
