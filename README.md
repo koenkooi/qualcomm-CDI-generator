@@ -2,6 +2,12 @@
 
 Tooling to generate CDI config files to pass devices through to containers
 
+The generated files conform to the [Container Device Interface (CDI)
+specification](https://github.com/cncf-tags/container-device-interface) from
+the CNCF, so they can be consumed by any CDI-aware container runtime and
+validated with the upstream `cdi` tool (see [Validating generated CDI
+files](#validating-generated-cdi-files)).
+
 ## Branches
 
 **main**: Primary development branch. Contributors should develop submissions based on this branch, and submit pull requests to this branch.
@@ -244,6 +250,35 @@ Example `qualcomm-gpu.json`:
     "env": [ "MACHINE_NAME=Qualcomm Technologies, Inc. Robotics RB3gen2" ]
   }
 }
+```
+
+## Validating generated CDI files
+
+The generated JSON files follow the [CNCF Container Device Interface
+specification](https://github.com/cncf-tags/container-device-interface), whose
+`cdi` command-line tool can validate spec files against the CDI JSON schema.
+
+Point `cdi validate` at a directory of spec files with `--spec-dirs` (it
+scans `/etc/cdi` and `/var/run/cdi` by default) and it exits non-zero on any
+load or schema error. Validation checks only the spec structure — the
+referenced device nodes need not exist on the validating machine:
+
+```shell
+$ cdi validate --spec-dirs /run/cdi
+No CDI Registry errors.
+```
+
+## Running the tests
+
+The stand-alone `unittest` suite under [tests/](tests/) exercises the
+spec-building helpers and validates generated CDI files with the `cdi` tool.
+It needs only the Python standard library; the validation tests additionally
+need `cdi`, located via the `CDI_TOOL` environment variable or `PATH` and
+skipped when it is not found.
+
+```shell
+python3 -m unittest discover -s tests -v
+CDI_TOOL=/path/to/cdi python3 -m unittest discover -s tests -v
 ```
 
 ## Development
