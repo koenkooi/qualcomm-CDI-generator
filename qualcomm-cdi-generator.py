@@ -264,6 +264,19 @@ def main() -> int:
     dynamiccdidir = Path(destdir).joinpath('run/cdi')
     cdifilename_stem = Path(cdifilename).stem
     cdifilename_suffix = Path(cdifilename).suffix
+
+    # Older versions wrote a single monolithic CDI file (e.g. qualcomm.json); we
+    # now write one file per device class (qualcomm-gpu.json, ...). Remove any
+    # leftover monolithic file so it cannot define conflicting/stale devices
+    # alongside the per-class files.
+    legacy_cdi = dynamiccdidir.joinpath(cdifilename)
+    if legacy_cdi.is_file():
+        if args.dry_run:
+            logging.info("Dry run: would remove old style monolithic CDI %s", legacy_cdi)
+        else:
+            logging.warning("Old style monolithic CDI detected, removing %s", legacy_cdi)
+            legacy_cdi.unlink()
+
     for cdiclass, devices in cdi_sections:
         if not devices:
             logging.debug("Skipping CDI file for '%s': no devices", cdiclass)

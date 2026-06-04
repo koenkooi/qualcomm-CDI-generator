@@ -29,6 +29,7 @@ or point the suite at a freshly built tool:
 
 import importlib.util
 import json
+import logging
 import os
 import shutil
 import subprocess
@@ -65,6 +66,52 @@ def _find_cdi_tool():
 
 gen = _load_generator()
 CDI_TOOL = _find_cdi_tool()
+
+
+# Device probes returned by a fully-populated synthetic host; used to drive
+# main() deterministically regardless of the hardware the tests run on.
+FAKE_NODES = {
+    "/dev/dri/renderD*": ["/dev/dri/renderD128"],
+    "/dev/video*": ["/dev/video0", "/dev/video1"],
+    "/dev/dma_heap/*system": ["/dev/dma_heap/system"],
+    "/dev/fastrpc-cdsp*": ["/dev/fastrpc-cdsp", "/dev/fastrpc-cdsp-secure"],
+    "/dev/fastrpc-adsp*": ["/dev/fastrpc-adsp"],
+    "/usr/share/*/*/*/*/dsp/": [],
+}
+
+
+def run_generator(extra_argv, fake_nodes=FAKE_NODES):
+    """Run main() with synthetic device discovery into a fresh argv.
+
+    find_devicenodes is replaced with controlled node lists and the direct
+    glob.glob() devicetree probe is stubbed empty, so the run does not depend
+    on the host hardware. Returns main()'s exit code.
+    """
+    real_find = gen.find_devicenodes
+
+    def fake_find(deviceglob):
+        # Controlled lists for known probes; fall back to the real glob for
+        # anything unexpected so a typo surfaces as a test error.
+        return list(fake_nodes[deviceglob]) if deviceglob in fake_nodes \
+            else real_find(deviceglob)
+
+    real_glob = gen.glob.glob
+
+    def fake_glob(pattern, *args, **kwargs):
+        if pattern == "/sys/firmware/devicetree/base/model":
+            return []
+        return real_glob(pattern, *args, **kwargs)
+
+    with mock.patch.object(gen, "find_devicenodes", fake_find), \
+            mock.patch.object(gen.glob, "glob", fake_glob), \
+            mock.patch.object(sys, "argv", ["qualcomm-cdi-generator.py"] + extra_argv):
+        # main() calls setup_logging(), which would print the generator's log
+        # lines to the test console; keep the suite output clean by muting it.
+        logging.disable(logging.CRITICAL)
+        try:
+            return gen.main()
+        finally:
+            logging.disable(logging.NOTSET)
 
 
 class StructuralTests(unittest.TestCase):
@@ -121,6 +168,35 @@ class StructuralTests(unittest.TestCase):
         paths = [n["path"] for n in parent["containerEdits"]["deviceNodes"]]
         self.assertIn("/dev/fastrpc-cdsp", paths)
         self.assertIn("/dev/fastrpc-cdsp-secure", paths)
+
+    def test_legacy_monolithic_cdi_removed(self):
+        # An old single-file qualcomm.json left in /run/cdi must be removed so it
+        # cannot define stale/conflicting devices alongside the per-class files.
+        with tempfile.TemporaryDirectory() as d:
+            cdi_dir = Path(d) / "run" / "cdi"
+            cdi_dir.mkdir(parents=True)
+            legacy = cdi_dir / "qualcomm.json"
+            legacy.write_text('{"cdiVersion": "0.6.0", "kind": "qualcomm.com/legacy"}')
+
+            rc = run_generator(["-d", d])
+
+            self.assertEqual(rc, 0)
+            self.assertFalse(legacy.exists(), "legacy monolithic CDI was not removed")
+            # The per-class files use a different name and must still be written.
+            self.assertTrue((cdi_dir / "qualcomm-gpu.json").is_file())
+
+    def test_legacy_monolithic_cdi_preserved_on_dry_run(self):
+        # A dry run reports what it would remove but must not touch the file.
+        with tempfile.TemporaryDirectory() as d:
+            cdi_dir = Path(d) / "run" / "cdi"
+            cdi_dir.mkdir(parents=True)
+            legacy = cdi_dir / "qualcomm.json"
+            legacy.write_text("{}")
+
+            rc = run_generator(["-d", d, "-n"])
+
+            self.assertEqual(rc, 0)
+            self.assertTrue(legacy.exists(), "dry run must not remove the legacy CDI")
 
 
 @unittest.skipIf(CDI_TOOL is None,
@@ -198,37 +274,8 @@ class ValidationTests(unittest.TestCase):
     def test_full_generator_run_validates(self):
         # Drive main() end to end with synthetic device discovery so every class
         # is produced, then validate the whole set of written files together.
-        fake_nodes = {
-            "/dev/dri/renderD*": ["/dev/dri/renderD128"],
-            "/dev/video*": ["/dev/video0", "/dev/video1"],
-            "/dev/dma_heap/*system": ["/dev/dma_heap/system"],
-            "/dev/fastrpc-cdsp*": ["/dev/fastrpc-cdsp", "/dev/fastrpc-cdsp-secure"],
-            "/dev/fastrpc-adsp*": ["/dev/fastrpc-adsp"],
-            "/usr/share/*/*/*/*/dsp/": [],
-        }
-
-        real_find = gen.find_devicenodes
-
-        def fake_find(deviceglob):
-            # Return controlled node lists for the known probes; fall back to the
-            # real glob for anything unexpected so a typo surfaces as a test error.
-            return list(fake_nodes[deviceglob]) if deviceglob in fake_nodes \
-                else real_find(deviceglob)
-
-        real_glob = gen.glob.glob
-
-        def fake_glob(pattern, *args, **kwargs):
-            # main() probes the devicetree model directly via glob.glob(); keep it
-            # empty so the run does not depend on the host's devicetree.
-            if pattern == "/sys/firmware/devicetree/base/model":
-                return []
-            return real_glob(pattern, *args, **kwargs)
-
-        with tempfile.TemporaryDirectory() as d, \
-                mock.patch.object(gen, "find_devicenodes", fake_find), \
-                mock.patch.object(gen.glob, "glob", fake_glob), \
-                mock.patch.object(sys, "argv", ["qualcomm-cdi-generator.py", "-d", d]):
-            rc = gen.main()
+        with tempfile.TemporaryDirectory() as d:
+            rc = run_generator(["-d", d])
 
             self.assertEqual(rc, 0)
             cdi_dir = Path(d) / "run" / "cdi"
