@@ -67,6 +67,17 @@ def generate_devicenodes_cdi(nickname, filesglob):
         def is_sibling(node):
             return node.endswith('-secure') and node[:-len('-secure')] in filesglob_set
 
+        def node_paths(node: str) -> list[dict]:
+            # deviceNodes entries for one node: the node itself, plus its -secure
+            # sibling when this is a cdsp/adsp node and that sibling is present.
+            paths = [{"path": node}]
+            if node.endswith(('cdsp', 'adsp')):
+                securepath = node + "-secure"
+                if securepath in filesglob_set:
+                    logging.debug("DSP node detected, adding -secure variant for %s", node)
+                    paths.append({"path": securepath})
+            return paths
+
         # Count only nodes that will produce their own CDI entry
         effective_count = sum(1 for n in filesglob if not is_sibling(n))
 
@@ -75,18 +86,7 @@ def generate_devicenodes_cdi(nickname, filesglob):
         for devicenode in sorted(filesglob):
             if is_sibling(devicenode):
                 continue
-            device_path = {"path": devicenode}
-            # cdsp/adsp may have a -secure sibling node
-            if str(devicenode).endswith('cdsp') or str(devicenode).endswith('adsp'):
-                securepath = devicenode + "-secure"
-                if securepath in filesglob_set:
-                    logging.debug("DSP node detected, adding regular and -secure variants")
-                    device_pathlist = { "deviceNodes": [ device_path, {"path": securepath} ] }
-                else:
-                    logging.debug("DSP node detected, -secure variant not present, skipping")
-                    device_pathlist = { "deviceNodes": [ device_path ] }
-            else:
-                device_pathlist = { "deviceNodes": [ device_path ] }
+            device_pathlist = { "deviceNodes": node_paths(devicenode) }
             cdi_index = get_devicenode_index(devicenode)
             # If there's only one match *and* it doesn't have its own index, don't add the '0' index
             if effective_count == 1 and cdi_index is None:
@@ -109,12 +109,8 @@ def generate_devicenodes_cdi(nickname, filesglob):
         for devicenode in sorted(filesglob):
             if is_sibling(devicenode):
                 continue
-            device_paths.append({"path": devicenode})
-            # Mirror the per-device special case so cdsp-secure/adsp-secure is also in :all
-            if str(devicenode).endswith('cdsp') or str(devicenode).endswith('adsp'):
-                securepath = devicenode + "-secure"
-                if securepath in filesglob_set:
-                    device_paths.append({"path": securepath})
+            # Reuse the per-device logic so cdsp-secure/adsp-secure is also in :all
+            device_paths.extend(node_paths(devicenode))
         device_pathlist = { "deviceNodes":  device_paths  }
         device_entrys = { "name": nickname+":all", "containerEdits": device_pathlist }
         logging.debug("CDI catch-all entry: %s", device_entrys)
