@@ -79,7 +79,7 @@ class StructuralTests(unittest.TestCase):
         spec = gen.build_cdi_spec("gpu", [], "myhook", [], [])
         hooks = spec["containerEdits"]["hooks"]
         self.assertEqual(len(hooks), 1)
-        self.assertEqual(hooks[0]["hookname"], "createContainer")
+        self.assertEqual(hooks[0]["hookName"], "createContainer")
         self.assertEqual(hooks[0]["path"], "/bin/myhook")
 
     def test_mounts_only_for_fastrpc(self):

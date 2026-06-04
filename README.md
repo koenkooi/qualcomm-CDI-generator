@@ -240,7 +240,7 @@ Example `qualcomm-gpu.json`:
     }
   ],
   "containerEdits": {
-    "hooks": [ { "hookname": "createContainer", "path": "/bin/vendorhook" } ],
+    "hooks": [ { "hookName": "createContainer", "path": "/bin/vendorhook" } ],
     "env": [ "MACHINE_NAME=Qualcomm Technologies, Inc. Robotics RB3gen2" ]
   }
 }
