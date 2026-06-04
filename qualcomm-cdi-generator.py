@@ -197,7 +197,16 @@ def main() -> int:
 
     # Host-side helpers
     # TODO: generate helper scripts based the results of the above probes
-    allnodes = rendernodes + videonodes + dmaheaps + cdsps + adsps
+    # Only chmod nodes for classes that are actually being generated, so
+    # --classes keeps the hook script in sync with the written CDI files.
+    nodes_by_class = {
+        'gpu':          rendernodes,
+        'v4l2':         videonodes,
+        'dmaheap':      dmaheaps,
+        'fastrpc-cdsp': cdsps,
+        'fastrpc-adsp': adsps,
+    }
+    allnodes = [n for c, nodes in nodes_by_class.items() if c in enabled_classes for n in nodes]
     logging.info("Total nodes aggregated for hook: %d", len(allnodes))
 
     # Bind mounts into container
