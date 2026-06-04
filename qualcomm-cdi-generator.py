@@ -147,7 +147,7 @@ def build_cdi_spec(cdiclass, devices, hookfilename, enventries, mountentries):
     """
     cdi = {"cdiVersion": CDI_VERSION, "kind": CDI_VENDOR + "/" + cdiclass}
     cdi["devices"] = devices
-    container_edits = {"hooks": [{"hookname": "createContainer", "path": "/bin/" + hookfilename}],
+    container_edits = {"hooks": [{"hookName": "createContainer", "path": "/bin/" + hookfilename}],
                        "env": enventries}
     # Only bind-mount DSP firmware and devicetree for fastrpc device classes,
     # as those are the only classes that use Hexagon binaries
