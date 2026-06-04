@@ -12,6 +12,9 @@
 # The generated JSON files follow the CDI spec format (see the CDI_VERSION
 # below) and can be validated with the upstream 'cdi' tool from that project.
 
+# Allow PEP 585/604 annotations (list[str], int | None) on Python 3.8/3.9.
+from __future__ import annotations
+
 import glob
 import json
 from pathlib import Path
@@ -40,7 +43,7 @@ def setup_logging(verbosity: int) -> None:
         level = logging.DEBUG
     logging.basicConfig(format="%(levelname)s: %(message)s", level=level)
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate Qualcomm CDI and hook script")
     parser.add_argument("-d", "--destdir", default="/", help="Destination root directory (default: %(default)s)")
     parser.add_argument("-H", "--hookfilename", default="vendorhook", help="Hook script filename (default: %(default)s)")
@@ -50,21 +53,21 @@ def parse_args():
     parser.add_argument("-v", "--verbose", action="count", default=0, help="Increase verbosity (-v, -vv)")
     return parser.parse_args()
 
-def find_devicenodes(deviceglob):
+def find_devicenodes(deviceglob: str) -> list[str]:
     logging.debug("Globbing device nodes: %s", deviceglob)
     files = glob.glob(deviceglob)
     logging.info("Found %d nodes for pattern %s", len(files), deviceglob)
     logging.debug("Nodes for %s: %s", deviceglob, files)
     return files
 
-def generate_devicenodes_cdi(nickname, filesglob):
+def generate_devicenodes_cdi(nickname: str, filesglob: list[str]) -> list[dict]:
     if filesglob:
         logging.info("Generating CDI entries for '%s' with %d node(s)", nickname, len(filesglob) if filesglob else 0)
         filesglob_set = set(filesglob)
 
         # -secure nodes whose non-secure parent is also present are handled as siblings of
         # that parent entry, not as independent top-level entries
-        def is_sibling(node):
+        def is_sibling(node: str) -> bool:
             return node.endswith('-secure') and node[:-len('-secure')] in filesglob_set
 
         # Count only nodes that will produce their own CDI entry
@@ -124,12 +127,13 @@ def generate_devicenodes_cdi(nickname, filesglob):
         logging.debug("No nodes found for '%s'; no CDI entries generated", nickname)
     return devicenodelist
 
-def get_devicenode_index(nodename):
+def get_devicenode_index(nodename: str) -> int | None:
     # Extract a trailing integer from the node name (e.g. 128 from 'renderD128')
     nodeindex = re.search(r'\d+$', nodename)
     return int(nodeindex.group()) if nodeindex else None
 
-def build_cdi_spec(cdiclass, devices, hookfilename, enventries, mountentries):
+def build_cdi_spec(cdiclass: str, devices: list[dict], hookfilename: str,
+                   enventries: list[str], mountentries: list[dict | None]) -> dict:
     """Assemble a single CDI specification dict for one device class.
 
     The returned structure follows the CDI spec format defined by the CNCF
