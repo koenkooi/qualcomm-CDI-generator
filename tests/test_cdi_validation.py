@@ -198,6 +198,39 @@ class StructuralTests(unittest.TestCase):
             self.assertEqual(rc, 0)
             self.assertTrue(legacy.exists(), "dry run must not remove the legacy CDI")
 
+    def _hook_nodes(self, destdir):
+        """Return the list of node paths chmod'd by the generated hook script."""
+        text = (Path(destdir) / "bin" / "vendorhook").read_text()
+        for line in text.splitlines():
+            if line.startswith("for node in"):
+                # "for node in <paths...> ; do"
+                return line[len("for node in"):].split(";")[0].split()
+        return []
+
+    def test_classes_filters_hook_nodes(self):
+        # --classes must scope the hook's chmod list to the selected classes,
+        # keeping the hook in sync with the generated CDI files.
+        with tempfile.TemporaryDirectory() as d:
+            rc = run_generator(["-d", d, "--classes", "fastrpc-cdsp"])
+            self.assertEqual(rc, 0)
+            nodes = self._hook_nodes(d)
+            self.assertEqual(sorted(nodes),
+                             ["/dev/fastrpc-cdsp", "/dev/fastrpc-cdsp-secure"])
+
+    def test_default_hook_includes_all_nodes(self):
+        # Without --classes the hook covers every discovered node.
+        with tempfile.TemporaryDirectory() as d:
+            rc = run_generator(["-d", d])
+            self.assertEqual(rc, 0)
+            nodes = set(self._hook_nodes(d))
+            self.assertEqual(nodes, {
+                "/dev/dri/renderD128",
+                "/dev/video0", "/dev/video1",
+                "/dev/dma_heap/system",
+                "/dev/fastrpc-cdsp", "/dev/fastrpc-cdsp-secure",
+                "/dev/fastrpc-adsp",
+            })
+
 
 @unittest.skipIf(CDI_TOOL is None,
                  "cdi tool not found (set CDI_TOOL or put 'cdi' on PATH)")
