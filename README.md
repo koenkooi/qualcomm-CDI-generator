@@ -16,7 +16,7 @@ files](#validating-generated-cdi-files)).
 
 The main tool only requires python3 to generate a CDI. To consume it, you need a container runtime like podman or docker.
 
-Recent versions of Podman (5.6.x) and Docker (28.3.x) work out of the box, for earlier Docker versions (26.x) you'll need a `/etc/docker/daemon.json` file:
+Recent versions of Podman (5.6.x) and Docker (28.3.x) work out of the box, for earlier Docker versions (26.x–27.x) you'll need a `/etc/docker/daemon.json` file:
 
 ```json
 {
@@ -37,6 +37,8 @@ For Docker 28.0.x only the feature enablement is needed:
 ```
 
 Either restart the docker daemon or reboot to have this config take effect.
+
+> **Note:** Docker 26.x shows the configured `CDI spec directories` in `docker info` but does not list `Discovered Devices`. Devices are still available for use with `--device`; the "Discovered Devices" section only appears in Docker 28.x and later.
 
 ## Installation Instructions
 
