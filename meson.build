@@ -1,5 +1,5 @@
 project('Qualcomm CDI generator', 'c',
-        version : '0.4',
+        version : '0.5',
         license : [ 'BSD-3-Clause' ],
         license_files: [ 'LICENSE.txt' ]
         )
