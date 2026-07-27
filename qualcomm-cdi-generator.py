@@ -4,6 +4,14 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause-Clear
 
+# This tool generates Container Device Interface (CDI) specification files as
+# defined by the CNCF Container Device Interface project:
+#
+#   https://github.com/cncf-tags/container-device-interface
+#
+# The generated JSON files follow the CDI spec format (see the CDI_VERSION
+# below) and can be validated with the upstream 'cdi' tool from that project.
+
 import glob
 import json
 from pathlib import Path
@@ -15,6 +23,14 @@ import os
 import argparse
 
 known_classes = ['gpu', 'v4l2', 'dmaheap', 'fastrpc-cdsp', 'fastrpc-adsp']
+
+# CDI specification version emitted in every generated spec file. See the CNCF
+# Container Device Interface project for the format definition:
+# https://github.com/cncf-tags/container-device-interface
+CDI_VERSION = "0.6.0"
+
+# CDI vendor namespace prefixed to every generated 'kind' (e.g. qualcomm.com/gpu)
+CDI_VENDOR = "qualcomm.com"
 
 def setup_logging(verbosity: int) -> None:
     level = logging.WARNING
@@ -112,6 +128,34 @@ def get_devicenode_index(nodename):
     # Extract a trailing integer from the node name (e.g. 128 from 'renderD128')
     nodeindex = re.search(r'\d+$', nodename)
     return int(nodeindex.group()) if nodeindex else None
+
+def build_cdi_spec(cdiclass, devices, hookfilename, enventries, mountentries):
+    """Assemble a single CDI specification dict for one device class.
+
+    The returned structure follows the CDI spec format defined by the CNCF
+    Container Device Interface project:
+        https://github.com/cncf-tags/container-device-interface
+
+    cdiclass:     device class name, suffixed onto CDI_VENDOR for the 'kind'
+    devices:      list of CDI device entries (as built by generate_devicenodes_cdi)
+    hookfilename: basename of the createContainer hook script under /bin
+    enventries:   list of "KEY=value" strings added to containerEdits.env
+    mountentries: list of mount dicts; only attached for fastrpc classes
+
+    This function is pure (no filesystem access) so the generated spec can be
+    validated by the upstream 'cdi' tool in the unit tests.
+    """
+    cdi = {"cdiVersion": CDI_VERSION, "kind": CDI_VENDOR + "/" + cdiclass}
+    cdi["devices"] = devices
+    container_edits = {"hooks": [{"hookname": "createContainer", "path": "/bin/" + hookfilename}],
+                       "env": enventries}
+    # Only bind-mount DSP firmware and devicetree for fastrpc device classes,
+    # as those are the only classes that use Hexagon binaries
+    if "fastrpc" in cdiclass:
+        # filter(None, ...) strips any None placeholders left in the pre-allocated list
+        container_edits["mounts"] = list(filter(None, mountentries))
+    cdi["containerEdits"] = container_edits
+    return cdi
 
 def main() -> int:
     args = parse_args()
@@ -228,16 +272,7 @@ def main() -> int:
         if not devices:
             logging.debug("Skipping CDI file for '%s': no devices", cdiclass)
             continue
-        cdi = {"cdiVersion": "0.6.0", "kind": "qualcomm.com/" + cdiclass}
-        cdi["devices"] = devices
-        container_edits = {"hooks": [{"hookname": "createContainer", "path": "/bin/" + hookfilename}],
-                           "env": enventries}
-        # Only bind-mount DSP firmware and devicetree for fastrpc device classes,
-        # as those are the only classes that use Hexagon binaries
-        if "fastrpc" in cdiclass:
-            # filter(None, ...) strips any None placeholders left in the pre-allocated list
-            container_edits["mounts"] = list(filter(None, mountentries))
-        cdi["containerEdits"] = container_edits
+        cdi = build_cdi_spec(cdiclass, devices, hookfilename, enventries, mountentries)
         section_filename = "%s-%s%s" % (cdifilename_stem, cdiclass, cdifilename_suffix)
         cdipath = dynamiccdidir.joinpath(section_filename)
         if args.dry_run:
