@@ -283,6 +283,20 @@ python3 -m unittest discover -s tests -v
 CDI_TOOL=/path/to/cdi python3 -m unittest discover -s tests -v
 ```
 
+## Continuous Integration
+
+Project CI runs the unit tests, CDI validation, package builds, static checks,
+and LAVA job schema checks. Pushes to `main` and the daily hardware workflow
+also flash a
+[qcom-deb-images](https://github.com/qualcomm-linux/qcom-deb-images) build on
+`qrb2210-rb1`, `qcs6490-rb3gen2-vision-kit`, and `glymur-crd` boards in the
+shared Foundries.io LAVA lab, then run the generator from the commit under
+test.
+
+See [.github/workflows/Readme.md](.github/workflows/Readme.md) for the
+workflow list and [ci/lava-tests/cdi-generate/](ci/lava-tests/cdi-generate/)
+for the on-target test assets.
+
 ## Development
 
 How to develop new features/fixes for the software. Maybe different than "usage". Also provide details on how to contribute via a [CONTRIBUTING.md file](CONTRIBUTING.md).

@@ -1,0 +1,47 @@
+name: Check LAVA templates
+
+on:
+  workflow_call:
+
+permissions: {}
+
+jobs:
+  schema-check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    container:
+      image: ghcr.io/linux-validation/lava/lava-server-amd64@sha256:746cdeebe8eb2b9ad7e2f9d7b26f3b2e2fe9bf3cb8e076877c8c1a6cbc024b4a
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Render and validate job definitions
+        shell: bash
+        run: |
+          set -euo pipefail
+          rendered_dir="$RUNNER_TEMP/lava-jobs"
+          rendered_count=0
+
+          while IFS= read -r -d '' template; do
+            relative_path="${template#ci/lava/}"
+            output="$rendered_dir/$relative_path"
+            python3 ci/lava_job.py render \
+              --template "$template" \
+              --output "$output" \
+              --build-download-url "https://example.com/qcom-deb-images/1" \
+              --suite trixie \
+              --repository qualcomm-linux/qualcomm-CDI-generator \
+              --revision 7e6f96ccf3e911a8a1a18accdbb91991aa0db66e \
+              --run-id 1 \
+              --run-attempt 1
+            rendered_count=$((rendered_count + 1))
+          done < <(find ci/lava -type f -name '*.yaml' -print0 | sort -z)
+
+          if [[ "$rendered_count" -eq 0 ]]; then
+            echo "::error::No LAVA job templates found under ci/lava"
+            exit 1
+          fi
+          ci/schemacheck.py "$rendered_dir"

@@ -1,0 +1,19 @@
+metadata:
+    format: Lava-Test Test Definition 1.0
+    name: cdi-generate
+    description: "Run qualcomm-cdi-generator.py on-target and validate its output."
+    maintainer:
+        - koen.kooi@oss.qualcomm.com
+    os:
+        - debian
+    scope:
+        - functional
+    devices:
+        - qrb2210-rb1
+        - qcs6490-rb3gen2-vision-kit
+        - glymur-crd
+
+run:
+    steps:
+        - cd ./ci/lava-tests/cdi-generate/
+        - ./run.sh
