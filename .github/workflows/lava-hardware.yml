@@ -1,0 +1,39 @@
+name: LAVA hardware
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "15 7 * * *"
+  workflow_dispatch:
+    inputs:
+      build_download_url:
+        description: >
+          Base URL of a qcom-deb-images build to flash before running tests
+          (e.g. an artifacts URL from that repo's debos.yml/build-daily.yml).
+          Defaults to the CDI_TEST_BUILD_DOWNLOAD_URL repository variable if
+          left empty.
+        type: string
+        default: ''
+      suite:
+        description: Debian suite in the qcom-deb-images build
+        type: string
+        default: trixie
+
+permissions:
+  contents: read
+
+jobs:
+  schema-check:
+    if: github.repository == 'qualcomm-linux/qualcomm-CDI-generator'
+    uses: ./.github/workflows/lava-schema-check.yml
+
+  hardware-tests:
+    if: github.repository == 'qualcomm-linux/qualcomm-CDI-generator'
+    needs: schema-check
+    uses: ./.github/workflows/lava-test.yml
+    secrets:
+      LAVATOKEN: ${{ secrets.LAVATOKEN }}
+    with:
+      build_download_url: ${{ inputs.build_download_url || vars.CDI_TEST_BUILD_DOWNLOAD_URL }}
+      suite: ${{ inputs.suite || 'trixie' }}

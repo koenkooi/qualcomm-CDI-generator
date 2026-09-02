@@ -1,0 +1,103 @@
+name: Run LAVA hardware tests
+
+on:
+  workflow_call:
+    inputs:
+      build_download_url:
+        description: >
+          Base URL of a qcom-deb-images build to flash before running tests
+          (e.g. an artifacts URL from that repo's debos.yml/build-daily.yml).
+          This repo doesn't build its own board image, so a recent
+          qcom-deb-images build has to be supplied here.
+        required: true
+        type: string
+      suite:
+        description: Distribution suite (e.g. trixie, forky)
+        type: string
+        default: trixie
+    secrets:
+      LAVATOKEN:
+        description: Foundries.io LAVA lab API token used to submit and poll test jobs
+        required: true
+
+permissions: {}
+
+jobs:
+  validate-configuration:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      build_download_url: ${{ steps.validate.outputs.build_download_url }}
+      suite: ${{ steps.validate.outputs.suite }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Validate configuration
+        id: validate
+        env:
+          BUILD_DOWNLOAD_URL: ${{ inputs.build_download_url }}
+          LAVA_TOKEN: ${{ secrets.LAVATOKEN }}
+          SUITE: ${{ inputs.suite }}
+        run: |
+          python3 ci/lava_job.py validate \
+            --build-download-url "$BUILD_DOWNLOAD_URL" \
+            --suite "$SUITE" \
+            --require-lava-token \
+            --github-output "$GITHUB_OUTPUT"
+
+  submit-job:
+    needs: validate-configuration
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    name: Submit ${{ matrix.board }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - board: glymur-crd
+            target: glymur-crd/cdi-generate.yaml
+          - board: qcs6490-rb3gen2-vision-kit
+            target: qcs6490-rb3gen2-vision-kit/cdi-generate.yaml
+          - board: qrb2210-rb1
+            target: qrb2210-rb1/cdi-generate.yaml
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Render ${{ matrix.target }}
+        id: render
+        env:
+          BUILD_DOWNLOAD_URL: ${{ needs.validate-configuration.outputs.build_download_url }}
+          SUITE: ${{ needs.validate-configuration.outputs.suite }}
+        run: |
+          output="$RUNNER_TEMP/${{ matrix.board }}-cdi-generate.yaml"
+          python3 ci/lava_job.py render \
+            --template "ci/lava/${{ matrix.target }}" \
+            --output "$output" \
+            --build-download-url "$BUILD_DOWNLOAD_URL" \
+            --suite "$SUITE" \
+            --repository "$GITHUB_REPOSITORY" \
+            --revision "$GITHUB_SHA" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT"
+          echo "path=$output" >> "$GITHUB_OUTPUT"
+
+      - name: Submit ${{ matrix.target }}
+        timeout-minutes: 240
+        uses: foundriesio/lava-action@3d40f621e0cd5acec50f557783b755f278ca892d # v13
+        with:
+          lava_token: ${{ secrets.LAVATOKEN }}
+          lava_url: 'lava.infra.foundries.io'
+          job_definition: ${{ steps.render.outputs.path }}
+          wait_for_job: true
+          fail_action_on_failure: true
+          fail_action_on_incomplete: true
+          save_result_as_artifact: false
+          save_job_details: false
