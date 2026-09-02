@@ -1,0 +1,8 @@
+include LICENSE.txt
+include README.md
+include qualcomm-cdi-generator.py
+include qualcomm-cdi-generator.service
+include 10-qualcomm-cdi-generator.preset
+
+exclude meson.build
+prune debian
