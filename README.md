@@ -44,6 +44,8 @@ Either restart the docker daemon or reboot to have this config take effect.
 
 Copy over `qualcomm-cdi-generator.py`
 
+Or install the `qualcomm-cdi-generator` Debian package to get `qualcomm-cdi-generator.py` in `/usr/sbin/` and the service and preset in `/usr/lib/systemd/system/` and `/usr/lib/systemd/system-preset/`.
+
 ## Usage
 
 On the target, run the CDI generator as root. The output directory `/run/cdi` is created automatically:
